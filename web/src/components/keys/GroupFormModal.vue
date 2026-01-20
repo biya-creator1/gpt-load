@@ -479,9 +479,8 @@ async function handleSubmit() {
               />
             </n-form-item>
 
-
-            <!-- 当gemini渠道时，测试路径不显示，需要一个占位div保持布局 -->
-            <div v-else class="form-item-half" />
+            <!-- 占位div保持布局 -->
+            <div class="form-item-half" />
           </div>
 
           <!-- 代理密钥 -->
