@@ -45,17 +45,8 @@ function handleGroupClick(group: Group) {
 }
 
 // 获取渠道类型的标签颜色
-function getChannelTagType(channelType: string) {
-  switch (channelType) {
-    case "openai":
-      return "success";
-    case "gemini":
-      return "info";
-    case "anthropic":
-      return "warning";
-    default:
-      return "default";
-  }
+function getChannelTagType(_channelType: string) {
+  return "info";
 }
 
 function openCreateGroupModal() {
@@ -98,10 +89,7 @@ function handleGroupCreated(group: Group) {
               @click="handleGroupClick(group)"
             >
               <div class="group-icon">
-                <span v-if="group.channel_type === 'openai'">🤖</span>
-                <span v-else-if="group.channel_type === 'gemini'">💎</span>
-                <span v-else-if="group.channel_type === 'anthropic'">🧠</span>
-                <span v-else>🔧</span>
+                <span>💎</span>
               </div>
               <div class="group-content">
                 <div class="group-name">{{ getGroupDisplayName(group) }}</div>

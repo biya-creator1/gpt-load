@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -22,7 +20,8 @@ func NewDB(configManager types.ConfigManager) (*gorm.DB, error) {
 	dbConfig := configManager.GetDatabaseConfig()
 	dsn := dbConfig.DSN
 	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_DSN is not configured")
+		// Use default sqlite path if DSN not provided
+		dsn = "data/gpt-load.db"
 	}
 
 	var newLogger logger.Interface
@@ -38,27 +37,10 @@ func NewDB(configManager types.ConfigManager) (*gorm.DB, error) {
 		)
 	}
 
-	var dialector gorm.Dialector
-	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-		dialector = postgres.New(postgres.Config{
-			DSN:                  dsn,
-			PreferSimpleProtocol: true,
-		})
-	} else if strings.Contains(dsn, "@tcp") {
-		if !strings.Contains(dsn, "parseTime") {
-			if strings.Contains(dsn, "?") {
-				dsn += "&parseTime=true"
-			} else {
-				dsn += "?parseTime=true"
-			}
-		}
-		dialector = mysql.Open(dsn)
-	} else {
-		if err := os.MkdirAll(filepath.Dir(dsn), 0755); err != nil {
-			return nil, fmt.Errorf("failed to create database directory: %w", err)
-		}
-		dialector = sqlite.Open(dsn + "?_busy_timeout=5000")
+	if err := os.MkdirAll(filepath.Dir(dsn), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
+	dialector := sqlite.Open(dsn + "?_busy_timeout=5000")
 
 	var err error
 	DB, err = gorm.Open(dialector, &gorm.Config{

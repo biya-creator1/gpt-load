@@ -7,7 +7,6 @@ import (
 	"gpt-load/internal/db"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
-	"gpt-load/internal/syncer"
 	"gpt-load/internal/types"
 	"gpt-load/internal/utils"
 	"os"
@@ -24,7 +23,8 @@ const SettingsUpdateChannel = "system_settings:updated"
 
 // SystemSettingsManager 管理系统配置
 type SystemSettingsManager struct {
-	syncer *syncer.CacheSyncer[types.SystemSettings]
+	settings     types.SystemSettings
+	groupManager groupManager
 }
 
 // NewSystemSettingsManager creates a new, uninitialized SystemSettingsManager.
@@ -33,12 +33,17 @@ func NewSystemSettingsManager() *SystemSettingsManager {
 }
 
 type groupManager interface {
-	Invalidate() error
+	Reload() error
 }
 
 // Initialize initializes the SystemSettingsManager with database and store dependencies.
-func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, isMaster bool) error {
-	settingsLoader := func() (types.SystemSettings, error) {
+func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager) error {
+	sm.groupManager = gm
+	return sm.Reload()
+}
+
+// Reload fetches the latest data and updates the cache.
+func (sm *SystemSettingsManager) Reload() error {
 		var dbSettings []models.SystemSetting
 		if err := db.DB.Find(&dbSettings).Error; err != nil {
 			return types.SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
@@ -77,36 +82,19 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager, 
 
 		sm.DisplaySystemConfig(settings)
 
-		return settings, nil
-	}
+		sm.settings = settings
 
-	afterLoader := func(newData types.SystemSettings) {
-		if !isMaster {
-			return
+		if sm.groupManager != nil {
+			if err := sm.groupManager.Reload(); err != nil {
+				logrus.Errorf("failed to reload group manager after settings update: %v", err)
+			}
 		}
-		gm.Invalidate()
-	}
 
-	syncer, err := syncer.NewCacheSyncer(
-		settingsLoader,
-		store,
-		SettingsUpdateChannel,
-		logrus.WithField("syncer", "system_settings"),
-		afterLoader,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create system settings syncer: %w", err)
-	}
-
-	sm.syncer = syncer
-	return nil
+		return nil
 }
 
-// Stop gracefully stops the SystemSettingsManager's background syncer.
+// Stop gracefully stops the SystemSettingsManager.
 func (sm *SystemSettingsManager) Stop(ctx context.Context) {
-	if sm.syncer != nil {
-		sm.syncer.Stop()
-	}
 }
 
 // EnsureSettingsInitialized 确保数据库中存在所有系统设置的记录。
@@ -153,11 +141,7 @@ func (sm *SystemSettingsManager) EnsureSettingsInitialized(authConfig types.Auth
 
 // GetSettings 获取当前系统配置
 func (sm *SystemSettingsManager) GetSettings() types.SystemSettings {
-	if sm.syncer == nil {
-		logrus.Warn("SystemSettingsManager is not initialized, returning default settings.")
-		return utils.DefaultSystemSettings()
-	}
-	return sm.syncer.Get()
+	return sm.settings
 }
 
 // GetAppUrl returns the effective App URL.
@@ -203,8 +187,8 @@ func (sm *SystemSettingsManager) UpdateSettings(settingsMap map[string]any) erro
 		}
 	}
 
-	// 触发所有实例重新加载
-	return sm.syncer.Invalidate()
+	// 触发重新加载
+	return sm.Reload()
 }
 
 // GetEffectiveConfig 获取有效配置 (系统配置 + 分组覆盖)

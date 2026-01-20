@@ -75,46 +75,38 @@ func NewApp(params AppParams) *App {
 
 // Start runs the application, it is a non-blocking call.
 func (a *App) Start() error {
-	// Master 节点执行初始化
-	if a.configManager.IsMaster() {
-		logrus.Info("Starting as Master Node.")
-
-		// 数据库迁移
-		if err := a.db.AutoMigrate(
-			&models.SystemSetting{},
-			&models.Group{},
-			&models.APIKey{},
-			&models.RequestLog{},
-			&models.GroupHourlyStat{},
-		); err != nil {
-			return fmt.Errorf("database auto-migration failed: %w", err)
-		}
-		// 数据修复
-		db.MigrateDatabase(a.db)
-		logrus.Info("Database auto-migration completed.")
-
-		// 初始化系统设置
-		if err := a.settingsManager.EnsureSettingsInitialized(a.configManager.GetAuthConfig()); err != nil {
-			return fmt.Errorf("failed to initialize system settings: %w", err)
-		}
-		logrus.Info("System settings initialized in DB.")
-
-		a.settingsManager.Initialize(a.storage, a.groupManager, a.configManager.IsMaster())
-
-		// 从数据库加载密钥到 Redis
-		if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
-			return fmt.Errorf("failed to load keys into key pool: %w", err)
-		}
-		logrus.Debug("API keys loaded into Redis cache by master.")
-
-		// 仅 Master 节点启动的服务
-		a.requestLogService.Start()
-		a.logCleanupService.Start()
-		a.cronChecker.Start()
-	} else {
-		logrus.Info("Starting as Slave Node.")
-		a.settingsManager.Initialize(a.storage, a.groupManager, a.configManager.IsMaster())
+	// 数据库迁移
+	if err := a.db.AutoMigrate(
+		&models.SystemSetting{},
+		&models.Group{},
+		&models.APIKey{},
+		&models.RequestLog{},
+		&models.GroupHourlyStat{},
+	); err != nil {
+		return fmt.Errorf("database auto-migration failed: %w", err)
 	}
+	// 数据修复
+	db.MigrateDatabase(a.db)
+	logrus.Info("Database auto-migration completed.")
+
+	// 初始化系统设置
+	if err := a.settingsManager.EnsureSettingsInitialized(a.configManager.GetAuthConfig()); err != nil {
+		return fmt.Errorf("failed to initialize system settings: %w", err)
+	}
+	logrus.Info("System settings initialized in DB.")
+
+	a.settingsManager.Initialize(a.storage, a.groupManager)
+
+	// 从数据库加载密钥到缓存
+	if err := a.keyPoolProvider.LoadKeysFromDB(); err != nil {
+		return fmt.Errorf("failed to load keys into key pool: %w", err)
+	}
+	logrus.Debug("API keys loaded into cache.")
+
+	// 启动服务
+	a.requestLogService.Start()
+	a.logCleanupService.Start()
+	a.cronChecker.Start()
 
 	// 显示配置并启动所有后台服务
 	a.configManager.DisplayServerConfig()
@@ -170,14 +162,9 @@ func (a *App) Stop(ctx context.Context) {
 	stoppableServices := []func(context.Context){
 		a.groupManager.Stop,
 		a.settingsManager.Stop,
-	}
-
-	if serverConfig.IsMaster {
-		stoppableServices = append(stoppableServices,
-			a.cronChecker.Stop,
-			a.logCleanupService.Stop,
-			a.requestLogService.Stop,
-		)
+		a.cronChecker.Stop,
+		a.logCleanupService.Stop,
+		a.requestLogService.Stop,
 	}
 
 	var wg sync.WaitGroup

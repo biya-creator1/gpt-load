@@ -6,7 +6,6 @@ import (
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
-	"gpt-load/internal/syncer"
 	"gpt-load/internal/utils"
 
 	"github.com/sirupsen/logrus"
@@ -17,7 +16,7 @@ const GroupUpdateChannel = "groups:updated"
 
 // GroupManager manages the caching of group data.
 type GroupManager struct {
-	syncer          *syncer.CacheSyncer[map[string]*models.Group]
+	groups          map[string]*models.Group
 	db              *gorm.DB
 	store           store.Store
 	settingsManager *config.SystemSettingsManager
@@ -36,68 +35,48 @@ func NewGroupManager(
 	}
 }
 
-// Initialize sets up the CacheSyncer. This is called separately to handle potential
+// Initialize sets up the cache.
 func (gm *GroupManager) Initialize() error {
-	loader := func() (map[string]*models.Group, error) {
-		var groups []*models.Group
-		if err := gm.db.Find(&groups).Error; err != nil {
-			return nil, fmt.Errorf("failed to load groups from db: %w", err)
-		}
+	return gm.Reload()
+}
 
-		groupMap := make(map[string]*models.Group, len(groups))
-		for _, group := range groups {
-			g := *group
-			g.EffectiveConfig = gm.settingsManager.GetEffectiveConfig(g.Config)
-			g.ProxyKeysMap = utils.StringToSet(g.ProxyKeys, ",")
-			groupMap[g.Name] = &g
-			logrus.WithFields(logrus.Fields{
-				"group_name":       g.Name,
-				"effective_config": g.EffectiveConfig,
-			}).Debug("Loaded group with effective config")
-		}
-
-		return groupMap, nil
+// Reload fetches the latest data and updates the cache.
+func (gm *GroupManager) Reload() error {
+	var groups []*models.Group
+	if err := gm.db.Find(&groups).Error; err != nil {
+		return fmt.Errorf("failed to load groups from db: %w", err)
 	}
 
-	syncer, err := syncer.NewCacheSyncer(
-		loader,
-		gm.store,
-		GroupUpdateChannel,
-		logrus.WithField("syncer", "groups"),
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create group syncer: %w", err)
+	groupMap := make(map[string]*models.Group, len(groups))
+	for _, group := range groups {
+		g := *group
+		g.EffectiveConfig = gm.settingsManager.GetEffectiveConfig(g.Config)
+		g.ProxyKeysMap = utils.StringToSet(g.ProxyKeys, ",")
+		groupMap[g.Name] = &g
+		logrus.WithFields(logrus.Fields{
+			"group_name":       g.Name,
+			"effective_config": g.EffectiveConfig,
+		}).Debug("Loaded group with effective config")
 	}
-	gm.syncer = syncer
+
+	gm.groups = groupMap
 	return nil
 }
 
 // GetGroupByName retrieves a single group by its name from the cache.
 func (gm *GroupManager) GetGroupByName(name string) (*models.Group, error) {
-	if gm.syncer == nil {
-		return nil, fmt.Errorf("GroupManager is not initialized")
-	}
-
-	groups := gm.syncer.Get()
-	group, ok := groups[name]
+	group, ok := gm.groups[name]
 	if !ok {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return group, nil
 }
 
-// Invalidate triggers a cache reload across all instances.
+// Invalidate triggers a cache reload.
 func (gm *GroupManager) Invalidate() error {
-	if gm.syncer == nil {
-		return fmt.Errorf("GroupManager is not initialized")
-	}
-	return gm.syncer.Invalidate()
+	return gm.Reload()
 }
 
-// Stop gracefully stops the GroupManager's background syncer.
+// Stop gracefully stops the GroupManager.
 func (gm *GroupManager) Stop(ctx context.Context) {
-	if gm.syncer != nil {
-		gm.syncer.Stop()
-	}
 }

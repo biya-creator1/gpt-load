@@ -53,7 +53,7 @@ interface GroupFormData {
   display_name: string;
   description: string;
   upstreams: UpstreamInfo[];
-  channel_type: "anthropic" | "gemini" | "openai";
+  channel_type: "gemini";
   sort: number;
   test_model: string;
   validation_endpoint: string;
@@ -74,7 +74,7 @@ const formData = reactive<GroupFormData>({
       weight: 1,
     },
   ] as UpstreamInfo[],
-  channel_type: "openai",
+  channel_type: "gemini",
   sort: 1,
   test_model: "",
   validation_endpoint: "",
@@ -97,42 +97,15 @@ const userModifiedFields = ref({
 
 // 根据渠道类型动态生成占位符提示
 const testModelPlaceholder = computed(() => {
-  switch (formData.channel_type) {
-    case "openai":
-      return "gpt-4.1-nano";
-    case "gemini":
-      return "gemini-2.0-flash-lite";
-    case "anthropic":
-      return "claude-3-haiku-20240307";
-    default:
-      return "请输入模型名称";
-  }
+  return "gemini-2.0-flash-lite";
 });
 
 const upstreamPlaceholder = computed(() => {
-  switch (formData.channel_type) {
-    case "openai":
-      return "https://api.openai.com";
-    case "gemini":
-      return "https://generativelanguage.googleapis.com";
-    case "anthropic":
-      return "https://api.anthropic.com";
-    default:
-      return "请输入上游地址";
-  }
+  return "https://generativelanguage.googleapis.com";
 });
 
 const validationEndpointPlaceholder = computed(() => {
-  switch (formData.channel_type) {
-    case "openai":
-      return "/v1/chat/completions";
-    case "anthropic":
-      return "/v1/messages";
-    case "gemini":
-      return ""; // Gemini 不显示此字段
-    default:
-      return "请输入验证端点路径";
-  }
+  return ""; // Gemini 不显示此字段
 });
 
 // 表单验证规则
@@ -192,68 +165,14 @@ watch(
   }
 );
 
-// 监听渠道类型变化，在新增模式下智能更新默认值
-watch(
-  () => formData.channel_type,
-  (_newChannelType, oldChannelType) => {
-    if (!props.group && oldChannelType) {
-      // 仅在新增模式且不是初始设置时处理
-      // 检查测试模型是否应该更新（为空或是旧渠道类型的默认值）
-      if (
-        !userModifiedFields.value.test_model ||
-        formData.test_model === getOldDefaultTestModel(oldChannelType)
-      ) {
-        formData.test_model = testModelPlaceholder.value;
-        userModifiedFields.value.test_model = false;
-      }
-
-      // 检查第一个上游地址是否应该更新
-      if (
-        formData.upstreams.length > 0 &&
-        (!userModifiedFields.value.upstream ||
-          formData.upstreams[0].url === getOldDefaultUpstream(oldChannelType))
-      ) {
-        formData.upstreams[0].url = upstreamPlaceholder.value;
-        userModifiedFields.value.upstream = false;
-      }
-    }
-  }
-);
-
-// 获取旧渠道类型的默认值（用于比较）
-function getOldDefaultTestModel(channelType: string): string {
-  switch (channelType) {
-    case "openai":
-      return "gpt-4.1-nano";
-    case "gemini":
-      return "gemini-2.0-flash-lite";
-    case "anthropic":
-      return "claude-3-haiku-20240307";
-    default:
-      return "";
-  }
-}
-
-function getOldDefaultUpstream(channelType: string): string {
-  switch (channelType) {
-    case "openai":
-      return "https://api.openai.com";
-    case "gemini":
-      return "https://generativelanguage.googleapis.com";
-    case "anthropic":
-      return "https://api.anthropic.com";
-    default:
-      return "";
-  }
-}
 
 // 重置表单
 function resetForm() {
   const isCreateMode = !props.group;
-  const defaultChannelType = "openai";
+  const defaultChannelType = "gemini";
 
   // 先设置渠道类型，这样 computed 属性能正确计算默认值
-  formData.channel_type = defaultChannelType;
+  formData.channel_type = defaultChannelType as "gemini";
 
   Object.assign(formData, {
     name: "",
@@ -301,7 +220,7 @@ function loadGroupData() {
     upstreams: props.group.upstreams?.length
       ? [...props.group.upstreams]
       : [{ url: "", weight: 1 }],
-    channel_type: props.group.channel_type || "openai",
+    channel_type: "gemini",
     sort: props.group.sort || 1,
     test_model: props.group.test_model || "",
     validation_endpoint: props.group.validation_endpoint || "",
@@ -482,7 +401,7 @@ async function handleSubmit() {
                     <template #trigger>
                       <n-icon :component="HelpCircleOutline" class="help-icon" />
                     </template>
-                    作为API路由的一部分，只能包含小写字母、数字、中划线或下划线，长度3-30位。例如：gemini、openai-2
+                    作为API路由的一部分，只能包含小写字母、数字、中划线或下划线，长度3-30位。例如：gemini、gemini-v1
                   </n-tooltip>
                 </div>
               </template>
@@ -515,15 +434,11 @@ async function handleSubmit() {
                     <template #trigger>
                       <n-icon :component="HelpCircleOutline" class="help-icon" />
                     </template>
-                    选择API提供商类型，决定了请求格式和认证方式。支持OpenAI、Gemini、Anthropic等主流AI服务商
+                    API提供商类型。此版本仅支持 Google Gemini。
                   </n-tooltip>
                 </div>
               </template>
-              <n-select
-                v-model:value="formData.channel_type"
-                :options="channelTypeOptions"
-                placeholder="请选择渠道类型"
-              />
+              <n-input value="Gemini" disabled />
             </n-form-item>
 
             <n-form-item label="排序" path="sort" class="form-item-half">
@@ -568,36 +483,6 @@ async function handleSubmit() {
               />
             </n-form-item>
 
-            <n-form-item
-              label="测试路径"
-              path="validation_endpoint"
-              class="form-item-half"
-              v-if="formData.channel_type !== 'gemini'"
-            >
-              <template #label>
-                <div class="form-label-with-tooltip">
-                  测试路径
-                  <n-tooltip trigger="hover" placement="top">
-                    <template #trigger>
-                      <n-icon :component="HelpCircleOutline" class="help-icon" />
-                    </template>
-                    <div>
-                      自定义用于验证密钥的API端点路径。如果不填写，将使用默认路径：
-                      <br />
-                      • OpenAI: /v1/chat/completions
-                      <br />
-                      • Anthropic: /v1/messages
-                      <br />
-                      如需使用非标准路径，请在此填写完整的API路径
-                    </div>
-                  </n-tooltip>
-                </div>
-              </template>
-              <n-input
-                v-model:value="formData.validation_endpoint"
-                :placeholder="validationEndpointPlaceholder || '可选，自定义用于验证key的API路径'"
-              />
-            </n-form-item>
 
             <!-- 当gemini渠道时，测试路径不显示，需要一个占位div保持布局 -->
             <div v-else class="form-item-half" />

@@ -31,11 +31,7 @@ func Register(channelType string, constructor channelConstructor) {
 
 // GetChannels returns a slice of all registered channel type names.
 func GetChannels() []string {
-	supportedTypes := make([]string, 0, len(channelRegistry))
-	for t := range channelRegistry {
-		supportedTypes = append(supportedTypes, t)
-	}
-	return supportedTypes
+	return []string{"gemini"}
 }
 
 // Factory is responsible for creating channel proxies.
@@ -65,6 +61,9 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 			return channel, nil
 		}
 	}
+
+	// Always use gemini for this edition
+	group.ChannelType = "gemini"
 
 	logrus.Debugf("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
 

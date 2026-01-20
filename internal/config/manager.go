@@ -48,7 +48,6 @@ type Config struct {
 	Performance types.PerformanceConfig `json:"performance"`
 	Log         types.LogConfig         `json:"log"`
 	Database    types.DatabaseConfig    `json:"database"`
-	RedisDSN    string                  `json:"redis_dsn"`
 }
 
 // NewManager creates a new configuration manager
@@ -70,7 +69,6 @@ func (m *Manager) ReloadConfig() error {
 
 	config := &Config{
 		Server: types.ServerConfig{
-			IsMaster:                !utils.ParseBoolean(os.Getenv("IS_SLAVE"), false),
 			Port:                    utils.ParseInteger(os.Getenv("PORT"), 3001),
 			Host:                    utils.GetEnvOrDefault("HOST", "0.0.0.0"),
 			ReadTimeout:             utils.ParseInteger(os.Getenv("SERVER_READ_TIMEOUT"), 60),
@@ -100,7 +98,6 @@ func (m *Manager) ReloadConfig() error {
 		Database: types.DatabaseConfig{
 			DSN: utils.GetEnvOrDefault("DATABASE_DSN", "./data/gpt-load.db"),
 		},
-		RedisDSN: os.Getenv("REDIS_DSN"),
 	}
 	m.config = config
 
@@ -110,11 +107,6 @@ func (m *Manager) ReloadConfig() error {
 	}
 
 	return nil
-}
-
-// IsMaster returns Server mode
-func (m *Manager) IsMaster() bool {
-	return m.config.Server.IsMaster
 }
 
 // GetAuthConfig returns authentication configuration
@@ -135,11 +127,6 @@ func (m *Manager) GetPerformanceConfig() types.PerformanceConfig {
 // GetLogConfig returns logging configuration
 func (m *Manager) GetLogConfig() types.LogConfig {
 	return m.config.Log
-}
-
-// GetRedisDSN returns the Redis DSN string.
-func (m *Manager) GetRedisDSN() string {
-	return m.config.RedisDSN
 }
 
 // GetDatabaseConfig returns the database configuration.
@@ -228,11 +215,6 @@ func (m *Manager) DisplayServerConfig() {
 		logrus.Info("    Database: configured")
 	} else {
 		logrus.Info("    Database: not configured")
-	}
-	if m.config.RedisDSN != "" {
-		logrus.Info("    Redis: configured")
-	} else {
-		logrus.Info("    Redis: not configured")
 	}
 	logrus.Info("====================================")
 	logrus.Info("")
