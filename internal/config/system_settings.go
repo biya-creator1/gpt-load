@@ -46,7 +46,7 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager) 
 func (sm *SystemSettingsManager) Reload() error {
 	var dbSettings []models.SystemSetting
 	if err := db.DB.Find(&dbSettings).Error; err != nil {
-		return types.SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
+		return fmt.Errorf("failed to load system settings from db: %w", err)
 	}
 
 	settingsMap := make(map[string]string)
