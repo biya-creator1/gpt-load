@@ -104,10 +104,6 @@ const upstreamPlaceholder = computed(() => {
   return "https://generativelanguage.googleapis.com";
 });
 
-const validationEndpointPlaceholder = computed(() => {
-  return ""; // Gemini 不显示此字段
-});
-
 // 表单验证规则
 const rules: FormRules = {
   name: [

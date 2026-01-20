@@ -45,7 +45,7 @@ function handleGroupClick(group: Group) {
 }
 
 // 获取渠道类型的标签颜色
-function getChannelTagType(_channelType: string) {
+function getChannelTagType(_channelType: string): "info" | "success" | "warning" | "error" | "default" | "primary" {
   return "info";
 }
 
