@@ -44,53 +44,53 @@ func (sm *SystemSettingsManager) Initialize(store store.Store, gm groupManager) 
 
 // Reload fetches the latest data and updates the cache.
 func (sm *SystemSettingsManager) Reload() error {
-		var dbSettings []models.SystemSetting
-		if err := db.DB.Find(&dbSettings).Error; err != nil {
-			return types.SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
-		}
+	var dbSettings []models.SystemSetting
+	if err := db.DB.Find(&dbSettings).Error; err != nil {
+		return types.SystemSettings{}, fmt.Errorf("failed to load system settings from db: %w", err)
+	}
 
-		settingsMap := make(map[string]string)
-		for _, setting := range dbSettings {
-			settingsMap[setting.SettingKey] = setting.SettingValue
-		}
+	settingsMap := make(map[string]string)
+	for _, setting := range dbSettings {
+		settingsMap[setting.SettingKey] = setting.SettingValue
+	}
 
-		// Start with default settings, then override with values from the database.
-		settings := utils.DefaultSystemSettings()
-		v := reflect.ValueOf(&settings).Elem()
-		t := v.Type()
-		jsonToField := make(map[string]string)
-		for i := range t.NumField() {
-			field := t.Field(i)
-			jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
-			if jsonTag != "" {
-				jsonToField[jsonTag] = field.Name
-			}
+	// Start with default settings, then override with values from the database.
+	settings := utils.DefaultSystemSettings()
+	v := reflect.ValueOf(&settings).Elem()
+	t := v.Type()
+	jsonToField := make(map[string]string)
+	for i := range t.NumField() {
+		field := t.Field(i)
+		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		if jsonTag != "" {
+			jsonToField[jsonTag] = field.Name
 		}
+	}
 
-		for key, valStr := range settingsMap {
-			if fieldName, ok := jsonToField[key]; ok {
-				fieldValue := v.FieldByName(fieldName)
-				if fieldValue.IsValid() && fieldValue.CanSet() {
-					if err := utils.SetFieldFromString(fieldValue, valStr); err != nil {
-						logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
-					}
+	for key, valStr := range settingsMap {
+		if fieldName, ok := jsonToField[key]; ok {
+			fieldValue := v.FieldByName(fieldName)
+			if fieldValue.IsValid() && fieldValue.CanSet() {
+				if err := utils.SetFieldFromString(fieldValue, valStr); err != nil {
+					logrus.Warnf("Failed to set value from map for field %s: %v", fieldName, err)
 				}
 			}
 		}
+	}
 
-		settings.ProxyKeysMap = utils.StringToSet(settings.ProxyKeys, ",")
+	settings.ProxyKeysMap = utils.StringToSet(settings.ProxyKeys, ",")
 
-		sm.DisplaySystemConfig(settings)
+	sm.DisplaySystemConfig(settings)
 
-		sm.settings = settings
+	sm.settings = settings
 
-		if sm.groupManager != nil {
-			if err := sm.groupManager.Reload(); err != nil {
-				logrus.Errorf("failed to reload group manager after settings update: %v", err)
-			}
+	if sm.groupManager != nil {
+		if err := sm.groupManager.Reload(); err != nil {
+			logrus.Errorf("failed to reload group manager after settings update: %v", err)
 		}
+	}
 
-		return nil
+	return nil
 }
 
 // Stop gracefully stops the SystemSettingsManager.
